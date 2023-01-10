@@ -55,16 +55,14 @@ typedef struct car{
 	pthread_cond_t seats;
 	pthread_cond_t engine;
 	pthread_cond_t topcover;
-	pthread_cond_t paint;
 	worker currentWorker; // current worker is only for logging purposes, since the thread functions only takes single argument
 	int CarID;
 	_Bool isCarReady; // this value only indicates if the car is ready to be sold. It will not get used for synchronization.
 	
 } car;
 
-void *place_chasis(void *arg){
-	// cast arg to car struct
-	car *c = (car*)arg;
+void place_chasis(car *c){
+	 // chasis dooes not wait for any condition
 	// lock the car's mutex
 	pthread_mutex_lock(&c->mutex);
 	// assign the worker Id, and part name to the car
@@ -80,19 +78,16 @@ void *place_chasis(void *arg){
 	// unlock the car's mutex
 	pthread_mutex_unlock(&c->mutex);
 	// signal that chasis is ready
-	pthread_cond_signal(&c->chasis);
+	pthread_cond_broadcast(&c->chasis);
 
 
-	return NULL;
 }
 
-void *place_tires(void *arg){
-	// cast arg to car struct
-	car *c = (car*)arg;
+void place_tires(car *c){
+	// tires wait for chasis to be ready
+	pthread_cond_wait(&c->chasis, &c->mutex);
 	// lock the car's mutex
 	pthread_mutex_lock(&c->mutex);
-	// assign the worker Id, and part name to the car
-	c->currentWorker.workerID = pthread_self();
 	c->currentWorker.currentPartName = TIRES;
 	// decrement daily tires remaining
 	NUM_DAILY_TIRES_REMAINING--;
@@ -106,19 +101,19 @@ void *place_tires(void *arg){
 	pthread_mutex_unlock(&c->mutex);
 
 	// signal that chasis is ready	// signal that tires are ready
-	pthread_cond_signal(&c->tires);
+	pthread_cond_broadcast(&c->tires);
 
-	return NULL;
 }
 
 
-void *mount_seats(void *arg){
-	// cast arg to car struct
-	car *c = (car*)arg;
+void mount_seats(car *c){
+
+	// seats wait for tires to be ready
+	pthread_cond_wait(&c->tires, &c->mutex);
+
 	// lock the car's mutex
 	pthread_mutex_lock(&c->mutex);
 	// assign the worker Id, and part name to the car
-	c->currentWorker.workerID = pthread_self();
 	c->currentWorker.currentPartName = SEATS;
 	// decrement daily seats remaining
 	NUM_DAILY_SEATS_REMAINING--;
@@ -132,18 +127,17 @@ void *mount_seats(void *arg){
 	pthread_mutex_unlock(&c->mutex);
 
 	// signal that seats are ready
-	pthread_cond_signal(&c->seats);
+	pthread_cond_broadcast(&c->seats);
 
-	return NULL;
 }
 
-void *place_engine(void *arg){
-	// cast arg to car struct
-	car *c = (car*)arg;
+void place_engine(car *c){
+
+	// engine wait for seats to be ready
+	pthread_cond_wait(&c->seats, &c->mutex);
+
 	// lock the car's mutex
 	pthread_mutex_lock(&c->mutex);
-	// assign the worker Id, and part name to the car
-	c->currentWorker.workerID = pthread_self();
 	c->currentWorker.currentPartName = ENGINE;
 	// decrement daily engines remaining
 	NUM_DAILY_ENGINES_REMAINING--;
@@ -156,18 +150,17 @@ void *place_engine(void *arg){
 	pthread_mutex_unlock(&c->mutex);
 
 	// signal that engine is ready
-	pthread_cond_signal(&c->engine);
+	pthread_cond_broadcast(&c->engine);
 
-	return NULL;
 }
 
-void* place_topcover(void *arg){
-	// cast arg to car struct
-	car *c = (car*)arg;
+void place_topcover(car *c){
+
+	// topcover wait for engine to be ready
+	pthread_cond_wait(&c->engine, &c->mutex);
+	
 	// lock the car's mutex
 	pthread_mutex_lock(&c->mutex);
-	// assign the worker Id, and part name to the car
-	c->currentWorker.workerID = pthread_self();
 	c->currentWorker.currentPartName = TOPCOVER;
 	// decrement daily topcover remaining
 	NUM_DAILY_TOPCOVERS_REMAINING--;
@@ -179,18 +172,17 @@ void* place_topcover(void *arg){
 	pthread_mutex_unlock(&c->mutex);
 
 	// signal that topcover is ready
-	pthread_cond_signal(&c->topcover);
+	pthread_cond_broadcast(&c->topcover);
 
-	return NULL;
 }
 
-void* paint_car(void *arg){
-	// cast arg to car struct
-	car *c = (car*)arg;
+void paint_car(car *c){
+	
+	// paint wait for topcover to be ready
+	pthread_cond_wait(&c->topcover, &c->mutex);
 	// lock the car's mutex
 	pthread_mutex_lock(&c->mutex);
 	// assign the worker Id, and part name to the car
-	c->currentWorker.workerID = pthread_self();
 	c->currentWorker.currentPartName = PAINT;
 	// decrement daily topcover remaining
 	NUM_DAILY_PAINTS_REMAINING--;
@@ -206,11 +198,57 @@ void* paint_car(void *arg){
 
 	// unlock the car's mutex
 	pthread_mutex_unlock(&c->mutex);
-	// signal that car is ready
-	pthread_cond_signal(&c->paint);
-	
+}
+
+// create thread functions for each worker type
+void *WORKER_A_WORK(void *args){
+	car *c = (car*)args;
+	// assign car's worker id to pthread_self()
+	c->currentWorker.workerID = pthread_self();
+	// assign car's worker type to A
+	c->currentWorker.workerType = WORKER_A;
+	// worker a can place the chasis 
+	place_chasis(c);
 	return NULL;
 }
+
+void *WORKER_B_WORK(void *args){
+	car *c = (car*)args;
+	// assign car's worker id to pthread_self()
+	c->currentWorker.workerID = pthread_self();
+	// assign car's worker type to B
+	c->currentWorker.workerType = WORKER_B;	
+	// worker b can mount the tires, place the seats and place the engine
+	place_tires(c);
+	mount_seats(c);
+	place_engine(c);
+	return NULL;
+}
+
+void *WORKER_C_WORK(void *args){
+	car *c = (car*)args;
+	// assign car's worker id to pthread_self()
+	c->currentWorker.workerID = pthread_self();
+	// assign car's worker type to C
+	c->currentWorker.workerType = WORKER_C;
+	// worker c can place the topcover
+	place_topcover(c);
+
+	return NULL;
+}
+
+void *WORKER_D_WORK(void *args){
+	car *c = (car*)args;
+	// assign car's worker id to pthread_self()
+	c->currentWorker.workerID = pthread_self();
+	// assign car's worker type to D
+	c->currentWorker.workerType = WORKER_D;
+	// worker d can paint the car
+	paint_car(c);
+	return NULL;
+}
+
+
 
 // iterate the day for the controller thread
 
@@ -288,7 +326,6 @@ int main(int argc, char *argv[]){
 		pthread_cond_init(&cars[i].seats, NULL);
 		pthread_cond_init(&cars[i].engine, NULL);
 		pthread_cond_init(&cars[i].topcover, NULL);
-		pthread_cond_init(&cars[i].paint, NULL);
 	}
 
 	// create thread array for each thread type
@@ -299,12 +336,46 @@ int main(int argc, char *argv[]){
 
 	// create a new thread for updating day value
 	pthread_t DAY_ITERATOR;
+	pthread_create(&DAY_ITERATOR, NULL, iterate_day, &NUM_DAYS);
 	
-	// make threads work on cars
-
-
-
+	// create threads for each worker type
 	
+	while (CURRENT_DAY < NUM_DAYS){
+		for(int i = 0; i < NUM_THREAD_A; i++){
+			pthread_create(&WORKERS_A[i], NULL, WORKER_A_WORK, &cars[i]);
+		}
+		for(int i = 0; i < NUM_THREAD_B; i++){
+			pthread_create(&WORKERS_B[i], NULL, WORKER_B_WORK, &cars[i]);
+		}
+		for(int i = 0; i < NUM_THREAD_C; i++){
+			pthread_create(&WORKERS_C[i], NULL, WORKER_C_WORK, &cars[i]);
+		}
+		for(int i = 0; i < NUM_THREAD_D; i++){
+			pthread_create(&WORKERS_D[i], NULL, WORKER_D_WORK, &cars[i]);
+		}
+
+
+
+		// join all threads
+		for(int i = 0; i < NUM_THREAD_A; i++){
+			pthread_join(WORKERS_A[i], NULL);
+		}
+		for (int i = 0; i< NUM_THREAD_B; i++){
+			pthread_join(WORKERS_B[i], NULL);
+		}
+		for (int i = 0; i< NUM_THREAD_C; i++){
+			pthread_join(WORKERS_C[i], NULL);
+		}
+		for (int i = 0; i< NUM_THREAD_D; i++){
+			pthread_join(WORKERS_D[i], NULL);
+		}
+	}
+
+	// join day iterator thread
+	pthread_join(DAY_ITERATOR, NULL);
+
+
+	// log the
 
 	// destroy eveything
 	for(int i = 0; i < min; i++){
@@ -314,7 +385,6 @@ int main(int argc, char *argv[]){
 		pthread_cond_destroy(&cars[i].seats);
 		pthread_cond_destroy(&cars[i].engine);
 		pthread_cond_destroy(&cars[i].topcover);
-		pthread_cond_destroy(&cars[i].paint);
 	}	
 
 	free(NUM_DAILY_CARS);
