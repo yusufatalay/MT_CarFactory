@@ -22,6 +22,8 @@ int NUM_THREAD_C;
 int NUM_THREAD_D;
 int NUM_DAYS;
 
+int CURRENT_DAY;
+
 int NUM_DAILY_CHASIS;
 int NUM_DAILY_TIRES;
 int NUM_DAILY_SEATS;
@@ -29,12 +31,18 @@ int NUM_DAILY_ENGINES;
 int NUM_DAILY_TOPCOVERS;
 int NUM_DAILY_PAINTS;
 
+int NUM_DAILY_CHASIS_REMAINING;
+int NUM_DAILY_TIRES_REMAINING;
+int NUM_DAILY_SEATS_REMAINING;
+int NUM_DAILY_ENGINES_REMAINING;
+int NUM_DAILY_TOPCOVERS_REMAINING;
+int NUM_DAILY_PAINTS_REMAINING;
+
 // number of cars to be produced are stored in 2d array fashion	for each day
 int **NUM_DAILY_CARS;
 
 typedef struct worker{
 	int workerID;
-	int currentDay;
 	char *workerType;
 	char *currentPartName;
 } worker;
@@ -62,11 +70,12 @@ void *place_chasis(void *arg){
 	// assign the worker Id, and part name to the car
 	c->currentWorker.workerID = pthread_self();
 	c->currentWorker.currentPartName = CHASIS;
-
+	// decrement daily chasis remaining
+	NUM_DAILY_CHASIS_REMAINING--;
 	// TODO: do some logging here
 	printf("%s-%d\t%d\t%s\t%d\n",
 	c->currentWorker.workerType,c->currentWorker.workerID,
-	c->CarID, c->currentWorker.currentPartName, c->currentWorker.currentDay);
+	c->CarID, c->currentWorker.currentPartName, CURRENT_DAY);
 
 	// unlock the car's mutex
 	pthread_mutex_unlock(&c->mutex);
@@ -85,11 +94,13 @@ void *place_tires(void *arg){
 	// assign the worker Id, and part name to the car
 	c->currentWorker.workerID = pthread_self();
 	c->currentWorker.currentPartName = TIRES;
+	// decrement daily tires remaining
+	NUM_DAILY_TIRES_REMAINING--;
 
 	// TODO: do some logging here
 	printf("%s-%d\t%d\t%s\t%d\n",
 	c->currentWorker.workerType,c->currentWorker.workerID,
-	c->CarID, c->currentWorker.currentPartName, c->currentWorker.currentDay);
+	c->CarID, c->currentWorker.currentPartName, CURRENT_DAY);
 
 	// unlock the car's mutex
 	pthread_mutex_unlock(&c->mutex);
@@ -100,6 +111,7 @@ void *place_tires(void *arg){
 	return NULL;
 }
 
+
 void *mount_seats(void *arg){
 	// cast arg to car struct
 	car *c = (car*)arg;
@@ -108,11 +120,13 @@ void *mount_seats(void *arg){
 	// assign the worker Id, and part name to the car
 	c->currentWorker.workerID = pthread_self();
 	c->currentWorker.currentPartName = SEATS;
+	// decrement daily seats remaining
+	NUM_DAILY_SEATS_REMAINING--;
 
 	// TODO: do some logging here
 	printf("%s-%d\t%d\t%s\t%d\n",
 	c->currentWorker.workerType,c->currentWorker.workerID,
-	c->CarID, c->currentWorker.currentPartName, c->currentWorker.currentDay);
+	c->CarID, c->currentWorker.currentPartName, CURRENT_DAY);
 
 	// unlock the car's mutex
 	pthread_mutex_unlock(&c->mutex);
@@ -131,11 +145,12 @@ void *place_engine(void *arg){
 	// assign the worker Id, and part name to the car
 	c->currentWorker.workerID = pthread_self();
 	c->currentWorker.currentPartName = ENGINE;
-
+	// decrement daily engines remaining
+	NUM_DAILY_ENGINES_REMAINING--;
 	// TODO: do some logging here
 	printf("%s-%d\t%d\t%s\t%d\n",
 	c->currentWorker.workerType,c->currentWorker.workerID,
-	c->CarID, c->currentWorker.currentPartName, c->currentWorker.currentDay);
+	c->CarID, c->currentWorker.currentPartName, CURRENT_DAY);
 
 	// unlock the car's mutex
 	pthread_mutex_unlock(&c->mutex);
@@ -154,15 +169,12 @@ void* place_topcover(void *arg){
 	// assign the worker Id, and part name to the car
 	c->currentWorker.workerID = pthread_self();
 	c->currentWorker.currentPartName = TOPCOVER;
-
+	// decrement daily topcover remaining
+	NUM_DAILY_TOPCOVERS_REMAINING--;
 	// TODO: do some logging here
 	printf("%s-%d\t%d\t%s\t%d\n",
 	c->currentWorker.workerType,c->currentWorker.workerID,
-	c->CarID, c->currentWorker.currentPartName, c->currentWorker.currentDay);
-
-	// since car painting is the last step, increase the car counter of the day
-	NUM_DAILY_CARS[1][c->currentWorker.currentDay] += 1;
-
+	c->CarID, c->currentWorker.currentPartName, CURRENT_DAY);
 	// unlock the car's mutex
 	pthread_mutex_unlock(&c->mutex);
 
@@ -179,26 +191,48 @@ void* paint_car(void *arg){
 	pthread_mutex_lock(&c->mutex);
 	// assign the worker Id, and part name to the car
 	c->currentWorker.workerID = pthread_self();
-	c->currentWorker.currentPartName = TOPCOVER;
+	c->currentWorker.currentPartName = PAINT;
+	// decrement daily topcover remaining
+	NUM_DAILY_PAINTS_REMAINING--;
+
+	// since car painting is the last step, increase the car counter of the day
+	NUM_DAILY_CARS[1][CURRENT_DAY] += 1;
 
 	c->isCarReady = 1;
-	// TODO: do some logging here
 	printf("%s-%d\t%d\t%s\t%d\n",
 	c->currentWorker.workerType,c->currentWorker.workerID,
-	c->CarID, c->currentWorker.currentPartName, c->currentWorker.currentDay);
+	c->CarID, c->currentWorker.currentPartName, CURRENT_DAY);
 
-	// allocate memory for the daily car counter 
-	NUM_DAILY_CARS = (int **)malloc(sizeof(int *) * NUM_DAYS);
 
 	// unlock the car's mutex
-	pthread_mutex_unlock(&c->mutex);// signal that car is ready
-
+	pthread_mutex_unlock(&c->mutex);
+	// signal that car is ready
 	pthread_cond_signal(&c->paint);
 	
 	return NULL;
 }
 
- 
+// iterate the day for the controller thread
+
+void* iterate_day(void *arg){
+	// cast arg to integer
+	NUM_DAYS = *(int*)arg;
+
+	for (CURRENT_DAY = 1 ; CURRENT_DAY <= NUM_DAYS; CURRENT_DAY++){
+		// in order to make this race condition save I should have lock for each different material, but I don't think it is necessary
+		NUM_DAILY_CHASIS_REMAINING  = NUM_DAILY_CHASIS;	
+		NUM_DAILY_ENGINES_REMAINING = NUM_DAILY_ENGINES;
+		NUM_DAILY_TIRES_REMAINING   = NUM_DAILY_TIRES;
+		NUM_DAILY_SEATS_REMAINING   = NUM_DAILY_SEATS;
+		NUM_DAILY_TOPCOVERS_REMAINING = NUM_DAILY_TOPCOVERS;
+		NUM_DAILY_PAINTS_REMAINING = NUM_DAILY_PAINTS;
+		// sleep for 3 seconds
+		sleep(3);
+	}
+	pthread_exit(NULL);
+
+
+}
 
 int main(int argc, char *argv[]){
 	// open input.txt
@@ -216,8 +250,10 @@ int main(int argc, char *argv[]){
 
 
 	// redirect the stdout to the output.txt with freopen
+	FILE *out = freopen("output.txt", "w", stdout);
 
-	int dailyCarNum[1][NUM_DAYS];
+	// allocate memory for the daily car counter 
+	NUM_DAILY_CARS = (int **)malloc(sizeof(int *) * NUM_DAYS);
 
 	// in order to determine max amunt of cars that can be made, we need to find the smallest amount of material
 	// so we can create a reasonable size array of cars
@@ -261,7 +297,13 @@ int main(int argc, char *argv[]){
 	pthread_t WORKERS_C[NUM_THREAD_C];
 	pthread_t WORKERS_D[NUM_THREAD_D];
 
+	// create a new thread for updating day value
+	pthread_t DAY_ITERATOR;
+	
 	// make threads work on cars
+
+
+
 	
 
 	// destroy eveything
@@ -276,6 +318,7 @@ int main(int argc, char *argv[]){
 	}	
 
 	free(NUM_DAILY_CARS);
+	fclose(out);
 	return 0;
 }
 
