@@ -132,7 +132,6 @@ void place_tires(car *c)
 	NUM_DAILY_TIRES_REMAINING--;
 	pthread_mutex_unlock(&mutex_tires);
 
-	// TODO: do some logging here
 	printf("%s-%u\t%d\t%s\t%d\n",
 		   c->currentWorker.workerType, c->currentWorker.workerID,
 		   c->CarID, c->currentWorker.currentPartName, CURRENT_DAY);
@@ -308,12 +307,8 @@ void *WORKER_D_WORK(void *args)
 
 void *iterate_day(void *arg)
 {
-	// cast arg to integer
-
 	for (CURRENT_DAY = 1; CURRENT_DAY <= NUM_DAYS; CURRENT_DAY++)
 	{
-		// in order to make this race condition save I should have lock for each different material, but I don't think it is necessary
-
 		sleep(3);
 
 		printf("DAILY CAR AT DAY %d : %d\n", CURRENT_DAY, DAILY_CAR);
@@ -341,7 +336,6 @@ void *iterate_day(void *arg)
 		pthread_mutex_lock(&mutex_paints);
 		NUM_DAILY_PAINTS_REMAINING = NUM_DAILY_PAINTS;
 		pthread_mutex_unlock(&mutex_paints);
-		// sleep for 3 seconds
 		DAILY_CAR = 0;
 	}
 	pthread_exit(NULL);
